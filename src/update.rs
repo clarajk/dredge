@@ -1,11 +1,10 @@
-use crate::git;
 use crate::template::Template;
 use anyhow::Context;
 use futures_util::StreamExt;
 use octocrab::Octocrab;
 use regex::{Regex, RegexBuilder};
 use sha2::{Digest, Sha256};
-use std::path::Path;
+use std::process::Command;
 use std::sync::LazyLock;
 use tracing::{error, info};
 
@@ -16,11 +15,7 @@ static SHELL_VAR_REGEX: LazyLock<Regex> = LazyLock::new(|| {
         .expect("invalid shell var regex")
 });
 
-pub async fn update(
-    template: &mut Template,
-    srcpkgs: impl AsRef<Path>,
-    client: &Octocrab,
-) -> anyhow::Result<()> {
+pub async fn update(template: &mut Template, client: &Octocrab) -> anyhow::Result<()> {
     let name = template
         .get_single("pkgname")
         .ok_or_else(|| anyhow::anyhow!("pkgname not found"))?;
@@ -64,8 +59,16 @@ pub async fn update(
             ("version", latest)
         }
         "git-head" => {
-            let head = git::ls_remote(repo, "HEAD").await?;
-            ("_commit", head)
+            let mut cmd = Command::new("git");
+            cmd.arg("ls-remote").arg(&repo).arg("HEAD");
+            let output = cmd
+                .output()
+                .with_context(|| format!("Failed to execute git ls-remote for repo '{}'", repo))?;
+            let string = String::from_utf8(output.stdout)?;
+            let (head, _) = string.split_once('\t').ok_or_else(|| {
+                anyhow::anyhow!("Unexpected output from git ls-remote for repo '{}'", repo)
+            })?;
+            ("_commit", head.to_string())
         }
         _ => {
             error!(
@@ -77,7 +80,7 @@ pub async fn update(
     };
 
     let old_value = template
-        .get_single(&key)
+        .get_single(key)
         .ok_or_else(|| anyhow::anyhow!("{} not found in template", key))?;
 
     if old_value != new_value {
@@ -85,9 +88,10 @@ pub async fn update(
             "Updating package '{}' from '{}' to '{}'",
             name, old_value, new_value
         );
-        template.set(&key, new_value);
+        template.set(key, new_value);
         template.set("revision", "1");
         update_checksum(template).await?;
+        template.save()?;
     }
 
     Ok(())

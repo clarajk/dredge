@@ -4,10 +4,8 @@ use octocrab::Octocrab;
 
 mod cli;
 mod cmd;
-mod git;
 mod template;
 mod update;
-mod xbps;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -16,12 +14,6 @@ async fn main() -> anyhow::Result<()> {
     rustls::crypto::ring::default_provider()
         .install_default()
         .expect("install rustls crypto provider");
-
-    let now = chrono::Utc::now();
-    let fmt = now.format("abyss-%Y%m%d-%H%M%S");
-    tracing::info!("Starting Abyss at {}", fmt);
-
-    return Ok(());
 
     let args = Args::parse();
     let token = std::env::var("GITHUB_TOKEN")?;
@@ -39,7 +31,7 @@ async fn main() -> anyhow::Result<()> {
             srcpkgs,
             dest,
         } => cmd::restore(remote, srcpkgs, dest, &github).await?,
-        Command::Publish { .. } => {}
+        Command::Publish { remote, source } => cmd::publish(remote, source, &github).await?,
     }
 
     Ok(())

@@ -1,16 +1,14 @@
 use crate::template::Template;
-use crate::{git, xbps};
 use anyhow::Context;
-use fs_extra::dir::CopyOptions;
+use bytes::Bytes;
 use futures_util::StreamExt;
 use octocrab::Octocrab;
+use octocrab::params::repos::Reference;
 use octocrab::repos::releases::MakeLatest;
 use std::collections::HashSet;
-use std::fs::{OpenOptions, ReadDir};
-use std::io::{Write};
+use std::fs::OpenOptions;
+use std::io::Write;
 use std::path::{Path, PathBuf};
-use bytes::Bytes;
-use octocrab::params::repos::Reference;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
 use tracing::info;
@@ -31,7 +29,7 @@ pub async fn update(srcpkgs: PathBuf, client: &Octocrab) -> anyhow::Result<()> {
     for entry in self::pkgs(&srcpkgs)? {
         info!("Checking {}", entry.display());
         let mut template = Template::from_file(entry)?;
-        crate::update::update(&mut template, &srcpkgs, &client).await?;
+        crate::update::update(&mut template, client).await?;
     }
 
     Ok(())
@@ -134,26 +132,34 @@ pub async fn publish(remote: String, binpkgs: PathBuf, client: &Octocrab) -> any
 
     for entry in &binpkgs {
         let data = tokio::fs::read(&entry).await?;
-        let file_name = entry.file_name().ok_or_else(|| {
-            anyhow::anyhow!("Failed to get file name for '{}'", entry.display())
-        })?
+        let file_name = entry
+            .file_name()
+            .ok_or_else(|| anyhow::anyhow!("Failed to get file name for '{}'", entry.display()))?
             .to_string_lossy()
             .to_string();
 
-        releases.upload_asset(
-            new_release.id.0,
-            &file_name,
-            Bytes::from(data)
-        ).send().await.with_context(|| format!("Failed to upload new release asset '{}'", entry.display()))?;
+        releases
+            .upload_asset(new_release.id.0, &file_name, Bytes::from(data))
+            .send()
+            .await
+            .with_context(|| format!("Failed to upload new release asset '{}'", entry.display()))?;
     }
 
     let new_release = releases.get(new_release.id.0).await?;
 
     if new_release.assets.len() != binpkgs.len() {
-        anyhow::bail!("Expected {} assets to be uploaded, but found {}", binpkgs.len(), new_release.assets.len());
+        anyhow::bail!(
+            "Expected {} assets to be uploaded, but found {}",
+            binpkgs.len(),
+            new_release.assets.len()
+        );
     }
 
-    releases.update(new_release.id.0).draft(false).send().await?;
+    releases
+        .update(new_release.id.0)
+        .draft(false)
+        .send()
+        .await?;
 
     let all_releases = releases.list().per_page(100).send().await?.items;
     for release in all_releases {

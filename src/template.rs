@@ -1,7 +1,6 @@
 use regex::{Regex, RegexBuilder};
 use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::LazyLock;
 
 fn get_regex(key: impl AsRef<str>) -> Regex {
     let key = key.as_ref();
