@@ -34,15 +34,12 @@ pub async fn update(template: &mut Template, client: &Octocrab) -> anyhow::Resul
 
     let (key, new_value) = match &update_source[..] {
         "github-release" => {
-            let (owner, repo) = {
-                let split: Vec<_> = repo.split('/').collect();
-                if split.len() != 2 {
-                    error!("Invalid GitHub repo '{}'", repo);
-                    return Ok(());
-                }
-
-                (split[0], split[1])
-            };
+            let (owner, repo) = repo.split_once('/').ok_or_else(|| {
+                anyhow::anyhow!(
+                        "Invalid repository format for package '{}'. Expected 'owner/repo'",
+                        name
+                    )
+            })?;
 
             let latest = client
                 .repos(owner, repo)
@@ -88,6 +85,13 @@ pub async fn update(template: &mut Template, client: &Octocrab) -> anyhow::Resul
             "Updating package '{}' from '{}' to '{}'",
             name, old_value, new_value
         );
+
+        if update_source == "git-head" {
+            let now = chrono::Utc::now();
+            let fmt = now.format("%Y%m%d%H%M%S");
+            template.set("version", fmt.to_string())
+        }
+
         template.set(key, new_value);
         template.set("revision", "1");
         update_checksum(template).await?;
