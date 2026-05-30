@@ -490,7 +490,7 @@ dependencies = [
 
 [[package]]
 name = "dredge"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "bytes",
@@ -502,7 +502,6 @@ dependencies = [
  "regex",
  "reqwest",
  "rustls",
- "serde_json",
  "sha2 0.11.0",
  "shell-words",
  "tokio",

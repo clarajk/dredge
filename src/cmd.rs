@@ -26,7 +26,7 @@ fn pkgs(path: impl AsRef<Path>) -> anyhow::Result<Vec<PathBuf>> {
 }
 
 pub async fn update(srcpkgs: PathBuf, client: &Octocrab) -> anyhow::Result<()> {
-    for entry in self::pkgs(&srcpkgs)? {
+    for entry in pkgs(&srcpkgs)? {
         info!("Checking {}", entry.display());
         let mut template = Template::from_file(entry)?;
         crate::update::update(&mut template, client).await?;
@@ -37,7 +37,7 @@ pub async fn update(srcpkgs: PathBuf, client: &Octocrab) -> anyhow::Result<()> {
 
 pub fn plan(srcpkgs: PathBuf, binpkgs: PathBuf, output: PathBuf) -> anyhow::Result<()> {
     let mut updated = vec![];
-    for entry in self::pkgs(srcpkgs)? {
+    for entry in pkgs(srcpkgs)? {
         let template = Template::from_file(entry)?;
         let name = template
             .get_single("pkgname")
@@ -55,7 +55,7 @@ pub fn plan(srcpkgs: PathBuf, binpkgs: PathBuf, output: PathBuf) -> anyhow::Resu
     let mut file = OpenOptions::new().append(true).open(output)?;
 
     writeln!(file, "packages={}", json)?;
-    
+
     file.sync_all()?;
 
     Ok(())
