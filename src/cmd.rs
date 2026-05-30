@@ -38,8 +38,10 @@ fn assets(path: impl AsRef<Path>) -> anyhow::Result<Vec<PathBuf>> {
 
         if name.ends_with(".xbps")
             || name.ends_with(".xbps.sig2")
+            || name.ends_with(".xbps.sig")
             || name.ends_with("-repodata")
             || name.ends_with("-repodata.sig2")
+            || name.ends_with("-repodata.sig")
         {
             assets.push(path);
         }
@@ -112,7 +114,7 @@ pub async fn restore(
         })?;
         desired.insert(bin_name);
     }
-    
+
     if !dest.exists() {
         std::fs::create_dir_all(&dest)?;
     }
