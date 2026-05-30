@@ -112,6 +112,10 @@ pub async fn restore(
         })?;
         desired.insert(bin_name);
     }
+    
+    if !dest.exists() {
+        std::fs::create_dir_all(&dest)?;
+    }
 
     let (owner, repo) = remote
         .split_once('/')
