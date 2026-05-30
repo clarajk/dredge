@@ -43,6 +43,7 @@ fn assets(path: impl AsRef<Path>) -> anyhow::Result<Vec<PathBuf>> {
             || name.ends_with("-repodata.sig2")
             || name.ends_with("-repodata.sig")
         {
+            info!("Discovered local asset '{}'", name);
             assets.push(path);
         }
     }
@@ -73,8 +74,11 @@ pub fn plan(
             .get_single("pkgname")
             .ok_or_else(|| anyhow::anyhow!("pkgname not found"))?;
 
+        info!("Checking '{}' to see if it needs to be included in the build plan", name);
+
         if force_rebuild {
             updated.push(name);
+            info!("    force rebuild enabled, pushing package and skipping checks");
             continue;
         }
 
@@ -82,15 +86,19 @@ pub fn plan(
             anyhow::anyhow!("Failed to determine asset name for package '{}'", name)
         })?;
 
+        info!("Checking if '{}' was restored and up to date", bin_name);
+
         if !binpkgs.join(&bin_name).exists() {
+            info!("    File not found, pushing package to plan");
             updated.push(name);
         }
     }
 
-    let json = updated.join(" ");
+    let list = updated.join(" ");
     let mut file = OpenOptions::new().append(true).open(output)?;
 
-    writeln!(file, "packages={}", json)?;
+    info!("Planning to rebuild {} packages ({})", updated.len(), list);
+    writeln!(file, "packages={}", list)?;
 
     file.sync_all()?;
 
@@ -112,6 +120,7 @@ pub async fn restore(
                 template.get_single("pkgname").unwrap_or_default()
             )
         })?;
+        info!("Attempting to restore '{}'", bin_name);
         desired.insert(bin_name);
     }
 
@@ -119,6 +128,7 @@ pub async fn restore(
         std::fs::create_dir_all(&dest)?;
     }
 
+    let mut count = 0;
     let (owner, repo) = remote
         .split_once('/')
         .ok_or_else(|| anyhow::anyhow!("Invalid GitHub repo '{}'", remote))?;
@@ -132,6 +142,8 @@ pub async fn restore(
             continue;
         }
 
+        count += 1;
+        info!("Found desired release asset '{}'", name);
         let path = dest.join(name);
         let resp = reqwest::get(url.clone())
             .await
@@ -145,6 +157,8 @@ pub async fn restore(
             file.write_all(&chunk?).await?;
         }
     }
+
+    info!("Restored {}/{} assets, expecting to build {} packages", count, desired.len(), desired.len() - count);
 
     Ok(())
 }
@@ -179,6 +193,8 @@ pub async fn publish(remote: String, binpkgs: PathBuf, client: &Octocrab) -> any
             .to_string_lossy()
             .to_string();
 
+        info!("Uploading asset '{}'", file_name);
+
         releases
             .upload_asset(new_release.id.0, &file_name, Bytes::from(data))
             .send()
@@ -208,6 +224,7 @@ pub async fn publish(remote: String, binpkgs: PathBuf, client: &Octocrab) -> any
             continue;
         }
 
+        info!("Deleting old release '{}'", release.name.unwrap_or_default());
         releases.delete(release.id.0).await?;
         let git_ref = Reference::Tag(release.tag_name.clone());
         if let Err(e) = repo.delete_ref(&git_ref).await {
