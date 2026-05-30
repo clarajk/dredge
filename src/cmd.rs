@@ -14,19 +14,42 @@ use tokio::io::AsyncWriteExt;
 use tracing::info;
 use tracing::log::warn;
 
-fn pkgs(path: impl AsRef<Path>) -> anyhow::Result<Vec<PathBuf>> {
-    std::fs::read_dir(path)?
+fn templates(path: impl AsRef<Path>) -> anyhow::Result<Vec<PathBuf>> {
+    Ok(std::fs::read_dir(path)?
         .filter_map(Result::ok)
-        .map(|entry| {
-            let mut path = entry.path();
-            path.push("template");
-            Ok(path)
-        })
-        .collect()
+        .map(|entry| entry.path().join("template"))
+        .filter(|entry| entry.is_file())
+        .collect())
+}
+
+fn assets(path: impl AsRef<Path>) -> anyhow::Result<Vec<PathBuf>> {
+    let mut assets = vec![];
+
+    for entry in std::fs::read_dir(path)? {
+        let path = entry?.path();
+
+        if !path.is_file() {
+            continue;
+        }
+
+        let Some(name) = path.file_name().and_then(|s| s.to_str()) else {
+            continue;
+        };
+
+        if name.ends_with(".xbps")
+            || name.ends_with(".xbps.sig2")
+            || name.ends_with("-repodata")
+            || name.ends_with("-repodata.sig2")
+        {
+            assets.push(path);
+        }
+    }
+
+    Ok(assets)
 }
 
 pub async fn update(srcpkgs: PathBuf, client: &Octocrab) -> anyhow::Result<()> {
-    for entry in pkgs(&srcpkgs)? {
+    for entry in templates(&srcpkgs)? {
         info!("Checking {}", entry.display());
         let mut template = Template::from_file(entry)?;
         crate::update::update(&mut template, client).await?;
@@ -35,13 +58,24 @@ pub async fn update(srcpkgs: PathBuf, client: &Octocrab) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn plan(srcpkgs: PathBuf, binpkgs: PathBuf, output: PathBuf) -> anyhow::Result<()> {
+pub fn plan(
+    srcpkgs: PathBuf,
+    binpkgs: PathBuf,
+    output: PathBuf,
+    force_rebuild: bool,
+) -> anyhow::Result<()> {
     let mut updated = vec![];
-    for entry in pkgs(srcpkgs)? {
+    for entry in templates(srcpkgs)? {
         let template = Template::from_file(entry)?;
         let name = template
             .get_single("pkgname")
             .ok_or_else(|| anyhow::anyhow!("pkgname not found"))?;
+
+        if force_rebuild {
+            updated.push(name);
+            continue;
+        }
+
         let bin_name = template.get_asset_name().ok_or_else(|| {
             anyhow::anyhow!("Failed to determine asset name for package '{}'", name)
         })?;
@@ -68,7 +102,7 @@ pub async fn restore(
     client: &Octocrab,
 ) -> anyhow::Result<()> {
     let mut desired = HashSet::new();
-    for entry in self::pkgs(&srcpkgs)? {
+    for entry in templates(&srcpkgs)? {
         let template = Template::from_file(entry)?;
         let bin_name = template.get_asset_name().ok_or_else(|| {
             anyhow::anyhow!(
@@ -88,7 +122,7 @@ pub async fn restore(
         let url = asset.browser_download_url;
 
         // download only release assets that haven't had their templates updated.
-        if !name.ends_with(".xbps") && !desired.iter().any(|x| name.ends_with(x)) {
+        if !desired.contains(&name) {
             continue;
         }
 
@@ -128,7 +162,7 @@ pub async fn publish(remote: String, binpkgs: PathBuf, client: &Octocrab) -> any
         .send()
         .await?;
 
-    let mut binpkgs = pkgs(&binpkgs)?;
+    let mut binpkgs = assets(&binpkgs)?;
     binpkgs.sort();
 
     for entry in &binpkgs {

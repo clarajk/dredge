@@ -25,7 +25,8 @@ async fn main() -> anyhow::Result<()> {
             srcpkgs,
             binpkgs,
             output,
-        } => cmd::plan(srcpkgs, binpkgs, output)?,
+            force_rebuild,
+        } => cmd::plan(srcpkgs, binpkgs, output, force_rebuild)?,
         Command::Restore {
             remote,
             srcpkgs,

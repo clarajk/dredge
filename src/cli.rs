@@ -22,6 +22,9 @@ pub enum Command {
 
         #[clap(long)]
         output: PathBuf,
+
+        #[clap(long)]
+        force_rebuild: bool,
     },
     Restore {
         #[clap(long)]
