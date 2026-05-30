@@ -51,10 +51,11 @@ pub fn plan(srcpkgs: PathBuf, binpkgs: PathBuf, output: PathBuf) -> anyhow::Resu
         }
     }
 
-    let json = json::to_string(&updated)?;
+    let json = updated.join(" ");
     let mut file = OpenOptions::new().append(true).open(output)?;
 
-    writeln!(file, "matrix={}", json)?;
+    writeln!(file, "packages={}", json)?;
+    
     file.sync_all()?;
 
     Ok(())
