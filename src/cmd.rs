@@ -74,7 +74,10 @@ pub fn plan(
             .get_single("pkgname")
             .ok_or_else(|| anyhow::anyhow!("pkgname not found"))?;
 
-        info!("Checking '{}' to see if it needs to be included in the build plan", name);
+        info!(
+            "Checking '{}' to see if it needs to be included in the build plan",
+            name
+        );
 
         if force_rebuild {
             updated.push(name);
@@ -158,7 +161,12 @@ pub async fn restore(
         }
     }
 
-    info!("Restored {}/{} assets, expecting to build {} packages", count, desired.len(), desired.len() - count);
+    info!(
+        "Restored {}/{} assets, expecting to build {} packages",
+        count,
+        desired.len(),
+        desired.len() - count
+    );
 
     Ok(())
 }
@@ -224,7 +232,10 @@ pub async fn publish(remote: String, binpkgs: PathBuf, client: &Octocrab) -> any
             continue;
         }
 
-        info!("Deleting old release '{}'", release.name.unwrap_or_default());
+        info!(
+            "Deleting old release '{}'",
+            release.name.unwrap_or_default()
+        );
         releases.delete(release.id.0).await?;
         let git_ref = Reference::Tag(release.tag_name.clone());
         if let Err(e) = repo.delete_ref(&git_ref).await {

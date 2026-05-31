@@ -36,9 +36,9 @@ pub async fn update(template: &mut Template, client: &Octocrab) -> anyhow::Resul
         "github-release" => {
             let (owner, repo) = repo.split_once('/').ok_or_else(|| {
                 anyhow::anyhow!(
-                        "Invalid repository format for package '{}'. Expected 'owner/repo'",
-                        name
-                    )
+                    "Invalid repository format for package '{}'. Expected 'owner/repo'",
+                    name
+                )
             })?;
 
             let latest = client
@@ -56,8 +56,19 @@ pub async fn update(template: &mut Template, client: &Octocrab) -> anyhow::Resul
             ("version", latest)
         }
         "git-head" => {
+            let git_ref = template
+                .get_single("_abyss_branch")
+                .map(|b| {
+                    if b == "HEAD" {
+                        b
+                    } else {
+                        format!("refs/heads/{b}")
+                    }
+                })
+                .unwrap_or_else(|| "HEAD".to_string());
+
             let mut cmd = Command::new("git");
-            cmd.arg("ls-remote").arg(&repo).arg("HEAD");
+            cmd.arg("ls-remote").arg(&repo).arg(git_ref);
             let output = cmd
                 .output()
                 .with_context(|| format!("Failed to execute git ls-remote for repo '{}'", repo))?;
